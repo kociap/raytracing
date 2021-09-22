@@ -134,8 +134,8 @@ namespace raytracing {
 
         Material green_diffuse{Vec3{0.8f, 0.8f, 0.0f}};
         Handle<Material> green_diffuse_handle = create_material(green_diffuse);
-        Material red_diffuse{Vec3{0.8f, 0.0f, 0.0f}};
-        Handle<Material> red_diffuse_handle = create_material(red_diffuse);
+        Material glass{Vec3{1.0f, 1.0f, 1.0f}, false, 0.0f, true, 1.4f};
+        Handle<Material> glass_handle = create_material(glass);
         Material red_metallic{Vec3{0.8f, 0.0f, 0.0f}, true, 0.0f};
         Handle<Material> red_metallic_handle = create_material(red_metallic);
         Material green_metallic{Vec3{0.8f, 0.8f, 0.0f}, true, 0.5f};
@@ -143,15 +143,15 @@ namespace raytracing {
 
         Scene scene;
         scene.spheres.push_back(Sphere{1.0f, red_metallic_handle});
-        scene.sphere_transforms.push_back(Transform{Vec3{-2.0f, 0.0f, -4.0f}});
+        scene.sphere_transforms.push_back(Transform{Vec3{-2.0f, 0.0f, -5.0f}});
         scene.spheres.push_back(Sphere{1.0f, green_metallic_handle});
-        scene.sphere_transforms.push_back(Transform{Vec3{2.0f, 0.0f, -4.0f}});
+        scene.sphere_transforms.push_back(Transform{Vec3{2.0f, 0.0f, -5.0f}});
         scene.spheres.push_back(Sphere{1.0f, green_diffuse_handle});
-        scene.sphere_transforms.push_back(Transform{Vec3{0.0f, 0.0f, -4.0f}});
-        scene.spheres.push_back(Sphere{0.5f, red_diffuse_handle});
+        scene.sphere_transforms.push_back(Transform{Vec3{0.0f, 0.0f, -5.0f}});
+        scene.spheres.push_back(Sphere{0.5f, glass_handle});
         scene.sphere_transforms.push_back(Transform{Vec3{1.0f, -0.5f, -3.0f}});
         scene.spheres.push_back(Sphere{200.0f, green_diffuse_handle});
-        scene.sphere_transforms.push_back(Transform{Vec3{0.0f, -201.0f, -1.0f}});
+        scene.sphere_transforms.push_back(Transform{Vec3{0.0f, -201.0f, -3.0f}});
 
         Array<Vec3> pixels{reserve, camera.image_width * camera.image_height};
         Vec3 const viewport_top_left = camera_transform.position + Vec3{-0.5f * camera.width, 0.5f * camera.height, -camera.focal_length};

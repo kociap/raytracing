@@ -13,6 +13,9 @@ namespace raytracing {
         bool metallic = false;
         // The roughness of a metallic surface
         f32 roughness = 0.0f;
+        bool transmissive = false;
+        // Index of refraction
+        f32 ior = 1.0f;
     };
 
     [[nodiscard]] Handle<Material> create_material(Material const& material);
