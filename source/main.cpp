@@ -119,7 +119,8 @@ namespace raytracing {
         ctx.samples = 16;
 
         Camera camera{90.0f, 16.0f / 9.0f, 720};
-        Transform camera_transform{Vec3{0.0f, 0.0f, 0.0f}};
+        Transform camera_transform{Vec3{0.0f, 3.0f, 0.0f}};
+        Camera_Target target{Vec3{-4.0f, 0.0f, -5.0f}};
 
         Material green_diffuse{Vec3{0.8f, 0.8f, 0.0f}};
         Handle<Material> green_diffuse_handle = create_material(green_diffuse);
@@ -142,8 +143,17 @@ namespace raytracing {
         scene.spheres.push_back(Sphere{200.0f, green_diffuse_handle});
         scene.sphere_transforms.push_back(Transform{Vec3{0.0f, -201.0f, -3.0f}});
 
+        // TODO: The lookat code does not correctly handle camera target being positioned exactly above the camera.
+        Vec3 const camera_view = math::normalize(target.position - camera_transform.position);
+        Vec3 const camera_right = math::normalize(math::cross(camera_view, Vec3{0.0f, 1.0f, 0.0f}));
+        Vec3 const camera_up = math::cross(camera_right, camera_view);
+        // Mat3 const viewport_rotation{camera_right, camera_up, camera_view};
+        // Vec3 const viewport_top_left = viewport_rotation * Vec3{-0.5f * camera.viewport_width, 0.5f * camera.viewport_height, camera.focal_length};
+        Vec3 const viewport_top_left =
+            -0.5f * camera.viewport_width * camera_right + 0.5f * camera.viewport_height * camera_up + camera.focal_length * camera_view;
+        Vec3 const viewport_plane = camera.viewport_width * camera_right - camera.viewport_height * camera_up;
+
         Array<Vec3> pixels{reserve, camera.image_width * camera.image_height};
-        Vec3 const viewport_top_left = camera_transform.position + Vec3{-0.5f * camera.viewport_width, 0.5f * camera.viewport_height, -camera.focal_length};
         i64 const samples_root = math::sqrt(ctx.samples);
         for(i64 y = 0; y < camera.image_height; ++y) {
             for(i64 x = 0; x < camera.image_width; ++x) {
@@ -151,9 +161,7 @@ namespace raytracing {
                 for(i64 sample = 0; sample < samples_root * samples_root; ++sample) {
                     f32 const u = (static_cast<f32>(x) + static_cast<f32>(sample % samples_root) / samples_root) / (camera.image_width - 1);
                     f32 const v = (static_cast<f32>(y) + static_cast<f32>(sample / samples_root) / samples_root) / (camera.image_height - 1);
-                    Ray const ray{camera_transform.position,
-                                  math::normalize(viewport_top_left + Vec3{u, v, 0.0f} * Vec3{camera.viewport_width, -camera.viewport_height, 0.0f} -
-                                                  camera_transform.position)};
+                    Ray const ray{camera_transform.position, math::normalize(viewport_top_left + Vec3{u, v, 0.0f} * viewport_plane)};
                     Vec3 const color = cast_ray(ctx, scene, ray, 0);
                     pixel += color;
                 }

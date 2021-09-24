@@ -18,5 +18,7 @@ namespace raytracing {
         Camera(f32 vfov, f32 aspect_ratio, i64 image_height);
     };
 
-    struct Camera_Target {};
+    struct Camera_Target {
+        Vec3 position;
+    };
 } // namespace raytracing
