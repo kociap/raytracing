@@ -7,6 +7,7 @@
 #include <anton/optional.hpp>
 #include <anton/slice.hpp>
 #include <build_config.hpp>
+#include <camera.hpp>
 #include <materials.hpp>
 #include <random_engine.hpp>
 
@@ -19,18 +20,6 @@ namespace raytracing {
 
     struct Transform {
         Vec3 position;
-    };
-
-    struct Camera {
-        // width / height
-        f32 aspect_ratio;
-        f32 width;
-        f32 height;
-        f32 focal_length;
-        // Width of the generated image in pixels.
-        i64 image_width;
-        // Height of the generated image in pixels.
-        i64 image_height;
     };
 
     struct Sphere {
@@ -129,7 +118,7 @@ namespace raytracing {
         ctx.bounces = 8;
         ctx.samples = 16;
 
-        Camera camera{16.0f / 9.0f, 2.0f, 9.0f / 8.0f, 1.0f, 1280, 720};
+        Camera camera{90.0f, 16.0f / 9.0f, 720};
         Transform camera_transform{Vec3{0.0f, 0.0f, 0.0f}};
 
         Material green_diffuse{Vec3{0.8f, 0.8f, 0.0f}};
@@ -154,7 +143,7 @@ namespace raytracing {
         scene.sphere_transforms.push_back(Transform{Vec3{0.0f, -201.0f, -3.0f}});
 
         Array<Vec3> pixels{reserve, camera.image_width * camera.image_height};
-        Vec3 const viewport_top_left = camera_transform.position + Vec3{-0.5f * camera.width, 0.5f * camera.height, -camera.focal_length};
+        Vec3 const viewport_top_left = camera_transform.position + Vec3{-0.5f * camera.viewport_width, 0.5f * camera.viewport_height, -camera.focal_length};
         i64 const samples_root = math::sqrt(ctx.samples);
         for(i64 y = 0; y < camera.image_height; ++y) {
             for(i64 x = 0; x < camera.image_width; ++x) {
@@ -163,7 +152,8 @@ namespace raytracing {
                     f32 const u = (static_cast<f32>(x) + static_cast<f32>(sample % samples_root) / samples_root) / (camera.image_width - 1);
                     f32 const v = (static_cast<f32>(y) + static_cast<f32>(sample / samples_root) / samples_root) / (camera.image_height - 1);
                     Ray const ray{camera_transform.position,
-                                  math::normalize(viewport_top_left + Vec3{u, v, 0.0f} * Vec3{camera.width, -camera.height, 0.0f} - camera_transform.position)};
+                                  math::normalize(viewport_top_left + Vec3{u, v, 0.0f} * Vec3{camera.viewport_width, -camera.viewport_height, 0.0f} -
+                                                  camera_transform.position)};
                     Vec3 const color = cast_ray(ctx, scene, ray, 0);
                     pixel += color;
                 }

@@ -42,6 +42,8 @@ FetchContent_MakeAvailable(anton_core)
 
 add_executable(raytracing
     "${CMAKE_CURRENT_SOURCE_DIR}/source/build_config.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/camera.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/camera.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/handle.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/main.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/materials.cpp"
