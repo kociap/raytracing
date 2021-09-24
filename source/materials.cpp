@@ -41,7 +41,7 @@ namespace raytracing {
         if(material.transmissive) {
             // Transmissive
             f32 const cos_theta_incident = math::dot(incident_ray.direction, normal);
-            bool const front_facing = cos_theta_incident > 0.0f;
+            bool const front_facing = cos_theta_incident < 0.0f;
             f32 const ior_ratio = front_facing ? 1.0f / material.ior : material.ior;
             f32 const sin_theta_incident = math::sqrt(1.0f - cos_theta_incident * cos_theta_incident);
             if(ior_ratio * sin_theta_incident > 1.0f) {
