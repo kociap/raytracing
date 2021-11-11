@@ -85,25 +85,21 @@ namespace raytracing {
     }
 
     [[nodiscard]] static Optional<Raycast_Result> intersect_mesh(Mesh const& mesh, Transform const& transform, Ray const ray) {
-        ANTON_ASSERT(mesh.vertices.size() % 3 == 0, "non-triangle mesh");
         // Translate ray to local space instead of the entire mesh to world space.
         Ray const translated_ray{ray.origin - transform.position, ray.direction};
         Raycast_Result result{Vec3{0.0f}, math::infinity, {}};
         bool hit;
-        for(i64 i = 0; i < mesh.vertices.size(); i += 3) {
-            Vec3 const v1 = mesh.vertices[i];
-            Vec3 const v2 = mesh.vertices[i + 1];
-            Vec3 const v3 = mesh.vertices[i + 2];
+        for(Triangle const& triangle: mesh.triangles) {
             // Optional<Raycast_Result> intersection_result = intersect_triangle(v1, v2, v3, translated_ray);
-            Optional<Raycast_Result> intersection_result = intersect_triangle(v1, v2, v3, ray);
+            Optional<Raycast_Result> intersection_result = intersect_triangle(triangle.v1, triangle.v2, triangle.v3, ray);
             if(intersection_result && intersection_result->distance > 0.001f && intersection_result->distance < result.distance) {
                 result = intersection_result.value();
+                result.material = triangle.material;
                 hit = true;
             }
         }
 
         if(hit) {
-            result.material = mesh.material;
             return result;
         } else {
             return null_optional;
@@ -222,7 +218,7 @@ namespace raytracing {
 
         // Import cube.
         Console_Output cout;
-        Expected<Array<u8>, String> file_read_result = read_file("cube.obj");
+        Expected<Array<u8>, String> file_read_result = read_file("./assets/cube.obj");
         if(!file_read_result) {
             cout.write(file_read_result.error());
             return -1;
@@ -238,11 +234,12 @@ namespace raytracing {
         for(anton::Mesh const& mesh: import_result.value()) {
             cout.write(format("Adding mesh {} (indices: {})\n"_sv, mesh.name, mesh.indices.size()));
             Mesh& scene_mesh = scene.meshes.emplace_back();
-            scene_mesh.material = grey_diffuse_handle;
-            for(i64 const index: mesh.indices) {
-                Vec3 const vertex = mesh.vertices[index];
-                // cout.write(format("vertex {} x: {} y: {} z: {}\n"_sv, index, vertex.x, vertex.y, vertex.z));
-                scene_mesh.vertices.push_back(mesh.vertices[index]);
+            for(i64 i = 0; i < mesh.indices.size(); i += 3) {
+                Vec3 const v1 = mesh.vertices[mesh.indices[i]];
+                Vec3 const v2 = mesh.vertices[mesh.indices[i + 1]];
+                Vec3 const v3 = mesh.vertices[mesh.indices[i + 2]];
+                Triangle triangle{v1, v2, v3, grey_diffuse_handle};
+                scene_mesh.triangles.push_back(ANTON_MOV(triangle));
             }
             // f32 const x = random_f32(rnd, -2.0f, 2.0f);
             // f32 const y = random_f32(rnd, -2.0f, 2.0f);

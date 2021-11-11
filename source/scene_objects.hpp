@@ -11,8 +11,14 @@ namespace raytracing {
         Handle<Material> material;
     };
 
-    struct Mesh {
-        Array<Vec3> vertices;
+    struct Triangle {
+        Vec3 v1;
+        Vec3 v2;
+        Vec3 v3;
         Handle<Material> material;
+    };
+
+    struct Mesh {
+        Array<Triangle> triangles;
     };
 } // namespace raytracing
