@@ -1,6 +1,9 @@
 #include <anton/array.hpp>
+#include <anton/console.hpp>
 #include <anton/filesystem.hpp>
 #include <anton/format.hpp>
+#include <anton/import.hpp>
+#include <anton/intrinsics.hpp>
 #include <anton/iterators/range.hpp>
 #include <anton/iterators/zip.hpp>
 #include <anton/math/math.hpp>
@@ -8,8 +11,10 @@
 #include <anton/slice.hpp>
 #include <build_config.hpp>
 #include <camera.hpp>
+#include <filesystem.hpp>
 #include <materials.hpp>
 #include <random_engine.hpp>
+#include <scene.hpp>
 
 namespace raytracing {
     struct Context {
@@ -18,33 +23,13 @@ namespace raytracing {
         i64 samples = 0;
     };
 
-    struct Transform {
-        Vec3 position;
-    };
-
-    struct Sphere {
-        f32 radius;
+    struct Raycast_Result {
+        Vec3 normal;
+        f32 distance;
         Handle<Material> material;
     };
 
-    static void write_ppm_file(Output_Stream& stream, Slice<Vec3 const> const pixels, i64 const width, i64 const height) {
-        String header = format("P3\n{} {}\n255\n"_sv, width, height);
-        stream.write(header);
-        for(Vec3 const pixel: pixels) {
-            i64 const r = static_cast<i64>(255.999f * pixel.r);
-            i64 const g = static_cast<i64>(255.999f * pixel.g);
-            i64 const b = static_cast<i64>(255.999f * pixel.b);
-            String value = format("{} {} {}\n"_sv, r, g, b);
-            stream.write(value);
-        }
-    }
-
-    struct Scene {
-        Array<Transform> sphere_transforms;
-        Array<Sphere> spheres;
-    };
-
-    static f32 intersect_sphere(Sphere const& sphere, Transform const& transform, Ray const ray) {
+    [[nodiscard]] static f32 intersect_sphere(Sphere const& sphere, Transform const& transform, Ray const ray) {
         Vec3 const ray_origin = ray.origin - transform.position;
         // a = dot(ray.direction, ray.direction) which is always 1
         f32 const b = 2.0f * dot(ray_origin, ray.direction);
@@ -57,35 +42,106 @@ namespace raytracing {
         }
     }
 
-    struct Raycast_Result {
-        Vec3 normal;
-        f32 distance;
-        Handle<Material> material;
-    };
+    [[nodiscard]] static Optional<f32> intersect_plane(Ray const ray, Vec3 const plane_normal, f32 const plane_distance) {
+        f32 const angle_cos = dot(ray.direction, plane_normal);
+        f32 const coeff = (plane_distance - dot(ray.origin, plane_normal)) / angle_cos;
+        // TODO: Shift the distance > 0.001f check here and remove it in the routines higher up.
+        if(math::abs(angle_cos) > math::epsilon && coeff >= 0.0f) {
+            return coeff;
+        } else {
+            return null_optional;
+        }
+    }
 
-    static Optional<Raycast_Result> intersect_scene(Scene const& scene, Ray const ray) {
-        f32 closest = math::infinity;
-        Vec3 normal;
-        Handle<Material> material;
-        bool hit = false;
-        Zip_Iterator begin{scene.spheres.begin(), scene.sphere_transforms.begin()};
-        Zip_Iterator end{scene.spheres.end(), scene.sphere_transforms.end()};
-        for(auto [sphere, transform]: Range(ANTON_MOV(begin), ANTON_MOV(end))) {
-            f32 const result = intersect_sphere(sphere, transform, ray);
-            if(result > 0.001f && result < closest) {
-                closest = result;
-                normal = ray.origin + ray.direction * result - transform.position;
-                material = sphere.material;
+    [[nodiscard]] static Optional<Raycast_Result> intersect_triangle(Vec3 const a, Vec3 const b, Vec3 const c, Ray const ray) {
+        Vec3 const u_vec = a - b;
+        Vec3 const v_vec = c - b;
+        Vec3 const plane_normal_unnormalized = math::cross(v_vec, u_vec);
+        Vec3 const plane_normal = math::normalize(plane_normal_unnormalized);
+        f32 const plane_distance = math::dot(b, plane_normal);
+        Optional<f32> const distance = intersect_plane(ray, plane_normal, plane_distance);
+        if(!distance) {
+            return null_optional;
+        }
+
+        Vec3 const pr = distance.value() * ray.direction;
+        // dot(pr, cross(bc, bc))
+        // The cross product is the plane normal in CCW. PR points the opposite way.
+        // det is negative when ABC is CCW, positive when ABC is CW.
+        f32 const det = math::dot(pr, plane_normal_unnormalized);
+        Vec3 const pa = a - ray.origin;
+        Vec3 const pb = b - ray.origin;
+        Vec3 const pc = c - ray.origin;
+        // When ABC is CCW, u and v are positive for R in ABC, negative for R outside ABC.
+        // When ABC is CW, u and v are negative for R in ABC, positive for R outside ABC.
+        // We divide by -det to normalize them and ensure they are always positive when R is inside ABC.
+        f32 const u = math::dot(pr, math::cross(pa, pc)) / -det;
+        f32 const v = math::dot(pr, math::cross(pc, pb)) / -det;
+        if(u >= 0.0f & v >= 0.0f & u + v <= 1.0f) {
+            return Raycast_Result{plane_normal, distance.value(), Handle<Material>{}};
+        } else {
+            return null_optional;
+        }
+    }
+
+    [[nodiscard]] static Optional<Raycast_Result> intersect_mesh(Mesh const& mesh, Transform const& transform, Ray const ray) {
+        ANTON_ASSERT(mesh.vertices.size() % 3 == 0, "non-triangle mesh");
+        // Translate ray to local space instead of the entire mesh to world space.
+        Ray const translated_ray{ray.origin - transform.position, ray.direction};
+        Raycast_Result result{Vec3{0.0f}, math::infinity, {}};
+        bool hit;
+        for(i64 i = 0; i < mesh.vertices.size(); i += 3) {
+            Vec3 const v1 = mesh.vertices[i];
+            Vec3 const v2 = mesh.vertices[i + 1];
+            Vec3 const v3 = mesh.vertices[i + 2];
+            // Optional<Raycast_Result> intersection_result = intersect_triangle(v1, v2, v3, translated_ray);
+            Optional<Raycast_Result> intersection_result = intersect_triangle(v1, v2, v3, ray);
+            if(intersection_result && intersection_result->distance > 0.001f && intersection_result->distance < result.distance) {
+                result = intersection_result.value();
                 hit = true;
             }
         }
 
         if(hit) {
-            Raycast_Result raycast_result;
-            raycast_result.distance = closest;
-            raycast_result.normal = math::normalize(normal);
-            raycast_result.material = material;
-            return raycast_result;
+            result.material = mesh.material;
+            return result;
+        } else {
+            return null_optional;
+        }
+    }
+
+    [[nodiscard]] static Optional<Raycast_Result> intersect_scene(Scene const& scene, Ray const ray) {
+        bool hit = false;
+        Raycast_Result result{Vec3{0.0f}, math::infinity, {}};
+        // Intersect spheres in the scene.
+        {
+            Zip_Iterator begin{scene.spheres.begin(), scene.sphere_transforms.begin()};
+            Zip_Iterator end{scene.spheres.end(), scene.sphere_transforms.end()};
+            for(auto [sphere, transform]: Range(ANTON_MOV(begin), ANTON_MOV(end))) {
+                f32 const intersection_result = intersect_sphere(sphere, transform, ray);
+                if(intersection_result > 0.001f && intersection_result < result.distance) {
+                    result.distance = intersection_result;
+                    result.normal = ray.origin + ray.direction * intersection_result - transform.position;
+                    result.material = sphere.material;
+                    hit = true;
+                }
+            }
+        }
+        // Instersect meshes in the scene.
+        {
+            Zip_Iterator begin{scene.meshes.begin(), scene.mesh_transforms.begin()};
+            Zip_Iterator end{scene.meshes.end(), scene.mesh_transforms.end()};
+            for(auto [mesh, transform]: Range(ANTON_MOV(begin), ANTON_MOV(end))) {
+                Optional<Raycast_Result> const intersection_result = intersect_mesh(mesh, transform, ray);
+                if(intersection_result && intersection_result->distance > 0.001f && intersection_result->distance < result.distance) {
+                    result = intersection_result.value();
+                    hit = true;
+                }
+            }
+        }
+
+        if(hit) {
+            return result;
         } else {
             return anton::null_optional;
         }
@@ -150,8 +206,8 @@ namespace raytracing {
         ctx.samples = 16;
 
         Camera camera{90.0f, 16.0f / 9.0f, 720};
-        Transform camera_transform{Vec3{-3.0f, 3.0f, 3.0f}};
-        Camera_Target target{Vec3{0.0f, 0.0f, -5.0f}};
+        Transform camera_transform{Vec3{2.0f, 2.0f, 5.0f}};
+        Camera_Target target{Vec3{0.0f, 0.0f, 0.0f}};
 
         Material green_diffuse{Vec3{0.8f, 0.8f, 0.0f}};
         Handle<Material> green_diffuse_handle = create_material(green_diffuse);
@@ -161,16 +217,48 @@ namespace raytracing {
         Handle<Material> red_metallic_handle = create_material(red_metallic);
         Material green_metallic{Vec3{0.8f, 0.8f, 0.0f}, true, 0.5f};
         Handle<Material> green_metallic_handle = create_material(green_metallic);
+        Material grey_diffuse{Vec3{0.4f, 0.4f, 0.4f}};
+        Handle<Material> grey_diffuse_handle = create_material(grey_diffuse);
 
+        // Import cube.
+        Console_Output cout;
+        Expected<Array<u8>, String> file_read_result = read_file("cube.obj");
+        if(!file_read_result) {
+            cout.write(file_read_result.error());
+            return -1;
+        }
+        Expected<Array<anton::Mesh>, String> import_result = import_obj(file_read_result.value(), {});
+        if(!import_result) {
+            cout.write(import_result.error());
+            return -1;
+        }
+
+        Random_Engine* rnd = create_random_engine(100478823);
         Scene scene;
-        scene.spheres.push_back(Sphere{1.0f, red_metallic_handle});
-        scene.sphere_transforms.push_back(Transform{Vec3{-2.0f, 0.0f, -5.0f}});
-        scene.spheres.push_back(Sphere{1.0f, green_metallic_handle});
-        scene.sphere_transforms.push_back(Transform{Vec3{2.0f, 0.0f, -5.0f}});
-        scene.spheres.push_back(Sphere{1.0f, green_diffuse_handle});
-        scene.sphere_transforms.push_back(Transform{Vec3{0.0f, 0.0f, -5.0f}});
-        scene.spheres.push_back(Sphere{0.5f, glass_handle});
-        scene.sphere_transforms.push_back(Transform{Vec3{1.0f, -0.5f, -3.0f}});
+        for(anton::Mesh const& mesh: import_result.value()) {
+            cout.write(format("Adding mesh {} (indices: {})\n"_sv, mesh.name, mesh.indices.size()));
+            Mesh& scene_mesh = scene.meshes.emplace_back();
+            scene_mesh.material = grey_diffuse_handle;
+            for(i64 const index: mesh.indices) {
+                Vec3 const vertex = mesh.vertices[index];
+                // cout.write(format("vertex {} x: {} y: {} z: {}\n"_sv, index, vertex.x, vertex.y, vertex.z));
+                scene_mesh.vertices.push_back(mesh.vertices[index]);
+            }
+            // f32 const x = random_f32(rnd, -2.0f, 2.0f);
+            // f32 const y = random_f32(rnd, -2.0f, 2.0f);
+            // f32 const z = random_f32(rnd, -2.0f, 2.0f);
+            // scene.mesh_transforms.push_back(Transform{Vec3{x, y, z}});
+            scene.mesh_transforms.push_back(Transform{Vec3{0.0f}});
+        }
+        // Add spheres.
+        // scene.spheres.push_back(Sphere{1.0f, red_metallic_handle});
+        // scene.sphere_transforms.push_back(Transform{Vec3{-2.0f, 0.0f, -5.0f}});
+        // scene.spheres.push_back(Sphere{1.0f, green_metallic_handle});
+        // scene.sphere_transforms.push_back(Transform{Vec3{2.0f, 0.0f, -5.0f}});
+        // scene.spheres.push_back(Sphere{1.0f, green_diffuse_handle});
+        // scene.sphere_transforms.push_back(Transform{Vec3{0.0f, 0.0f, -5.0f}});
+        // scene.spheres.push_back(Sphere{0.5f, glass_handle});
+        // scene.sphere_transforms.push_back(Transform{Vec3{-1.0f, -0.5f, -3.0f}});
         scene.spheres.push_back(Sphere{200.0f, green_diffuse_handle});
         scene.sphere_transforms.push_back(Transform{Vec3{0.0f, -201.0f, -3.0f}});
 

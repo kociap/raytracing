@@ -39,11 +39,19 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/kociap/anton_core.git
 )
 FetchContent_MakeAvailable(anton_core)
+# Add anton_import
+FetchContent_Declare(
+    anton_import
+    GIT_REPOSITORY https://github.com/kociap/anton_import.git
+)
+FetchContent_MakeAvailable(anton_import)
 
 add_executable(raytracing
     "${CMAKE_CURRENT_SOURCE_DIR}/source/build_config.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/camera.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/camera.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/filesystem.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/filesystem.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/handle.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/main.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/materials.cpp"
@@ -53,5 +61,5 @@ add_executable(raytracing
 )
 set_target_properties(raytracing PROPERTIES CXX_STANDARD 17 CXX_EXTENSIONS OFF)
 target_compile_options(raytracing PRIVATE ${RT_COMPILE_FLAGS})
-target_link_libraries(raytracing PUBLIC anton_core)
+target_link_libraries(raytracing PUBLIC anton_core anton_import)
 target_include_directories(raytracing PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/source")
