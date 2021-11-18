@@ -16,6 +16,7 @@ namespace raytracing {
     // using Mat4 = anton::math::Mat4;
     // using Quat = anton::math::Quat;
     using Ray = anton::math::Ray;
+    using Extent3 = anton::math::Extent3;
     // using OBB = anton::math::OBB;
 
     using namespace anton;

@@ -7,6 +7,7 @@
 
 namespace raytracing {
     struct Sphere {
+        Vec3 position;
         f32 radius;
         Handle<Material> material;
     };
@@ -16,9 +17,5 @@ namespace raytracing {
         Vec3 v2;
         Vec3 v3;
         Handle<Material> material;
-    };
-
-    struct Mesh {
-        Array<Triangle> triangles;
     };
 } // namespace raytracing

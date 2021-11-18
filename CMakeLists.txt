@@ -53,11 +53,17 @@ add_executable(raytracing
     "${CMAKE_CURRENT_SOURCE_DIR}/source/filesystem.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/filesystem.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/handle.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/intersections.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/intersections.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/kd_tree.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/kd_tree.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/main.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/materials.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/materials.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/primitives.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/random_engine.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/random_engine.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/scene.hpp"
 )
 set_target_properties(raytracing PROPERTIES CXX_STANDARD 17 CXX_EXTENSIONS OFF)
 target_compile_options(raytracing PRIVATE ${RT_COMPILE_FLAGS})
