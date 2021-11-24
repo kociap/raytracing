@@ -49,6 +49,31 @@ namespace raytracing {
         }
     }
 
+    struct Surface_Area_Heuristic {
+    private:
+        Extent3 bounding_extent;
+        f32 inv_area;
+
+    public:
+        Surface_Area_Heuristic(Extent3 bounding_extent): bounding_extent(bounding_extent) {
+            inv_area = 1.0 / calculate_surface_area(bounding_extent);
+        }
+
+        [[nodiscard]] Pair<f32, f32> operator()(i32 const axis, f32 const split_position) const {
+            // Calculate the cost of this split.
+            i32 const other_axis0 = (axis + 1) % 3;
+            i32 const other_axis1 = (axis + 2) % 3;
+            Vec3 const bounds_diagonal = bounding_extent.max - bounding_extent.min;
+            f32 const below_area = 2.0 * (bounds_diagonal[other_axis0] * bounds_diagonal[other_axis1] +
+                                          (split_position - bounding_extent.min[axis]) * (bounds_diagonal[other_axis0] + bounds_diagonal[other_axis1]));
+            f32 const above_area = 2.0 * (bounds_diagonal[other_axis0] * bounds_diagonal[other_axis1] +
+                                          (bounding_extent.max[axis] - split_position) * (bounds_diagonal[other_axis0] + bounds_diagonal[other_axis1]));
+            f32 const probability_below = below_area * inv_area;
+            f32 const probability_above = above_area * inv_area;
+            return {probability_below, probability_above};
+        }
+    };
+
     void KD_Tree::construct_node(Construct_Parameters const& p) {
         i64 const node_index = nodes.size();
         nodes.push_back(Node{});
@@ -64,9 +89,8 @@ namespace raytracing {
         f32 best_cost = math::infinity;
         i64 best_offset = -1;
         i32 best_axis = -1;
-        f32 const inv_area = 1.0 / calculate_surface_area(p.bounds);
         i32 axis = find_maximum_extent_axis(p.bounds);
-        Vec3 const bounds_diagonal = p.bounds.max - p.bounds.min;
+        Surface_Area_Heuristic const heuristic(p.bounds);
         for(i32 retries = 0; best_axis == -1 && retries < 3; retries += 1) {
             // Compute edges for all bounding volumes in this node.
             for(i64 i = 0; i < p.primitives; ++i) {
@@ -79,7 +103,7 @@ namespace raytracing {
             quick_sort(p.edges[axis].data(), p.edges[axis].data() + 2 * p.primitives, [](Edge const& lhs, Edge const& rhs) {
                 // The edges are only equal when positions are equal and their types are equal.
                 // Otherwise sort by position with secondary sorting on min. min edges come first.
-                return lhs.position < rhs.position || lhs.min > rhs.min;
+                return lhs.position < rhs.position || (lhs.position < rhs.position && lhs.min > rhs.min);
             });
 
             // Compute all splits for the current axis.
@@ -93,17 +117,9 @@ namespace raytracing {
 
                 f32 const split_position = edge.position;
                 if(split_position > p.bounds.min[axis] && split_position < p.bounds.max[axis]) {
-                    // Calculate the cost of this split.
-                    i32 const other_axis0 = (axis + 1) % 3;
-                    i32 const other_axis1 = (axis + 2) % 2;
-                    f32 const below_area = 2.0 * (bounds_diagonal[other_axis0] * bounds_diagonal[other_axis1] +
-                                                  (split_position - p.bounds.min[axis]) * (bounds_diagonal[other_axis0] + bounds_diagonal[other_axis1]));
-                    f32 const above_area = 2.0 * (bounds_diagonal[other_axis0] * bounds_diagonal[other_axis1] +
-                                                  (p.bounds.max[axis] - split_position) * (bounds_diagonal[other_axis0] + bounds_diagonal[other_axis1]));
-                    f32 const probability_below = below_area * inv_area;
-                    f32 const probability_above = above_area * inv_area;
+                    auto [p_below, p_above] = heuristic(axis, split_position);
                     f32 const empty_bonus = (above == 0 || below == 0) ? p.empty_bonus : 0.0f;
-                    f32 const cost = p.traverse_cost + p.intersect_cost * (1.0f - empty_bonus) * (probability_below * below + probability_above * above);
+                    f32 const cost = p.traverse_cost + p.intersect_cost * (1.0f - empty_bonus) * (p_below * below + p_above * above);
                     if(cost < best_cost) {
                         best_cost = cost;
                         best_axis = axis;

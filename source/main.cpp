@@ -86,11 +86,13 @@ namespace raytracing {
         Vec3 const viewport_top_left = viewport_rotation * Vec3{-0.5f * camera.viewport_width, 0.5f * camera.viewport_height, camera.focal_length};
 
         KD_Tree tree;
-        tree.build(scene, KD_Tree::Build_Options{.max_primitives = 8});
+        tree.build(scene, KD_Tree::Build_Options{.max_primitives = 16, .empty_bonus = 0.2f});
 
+        Console_Output cout;
         Array<Vec3> pixels{reserve, camera.image_width * camera.image_height};
         i64 const samples_root = math::sqrt(ctx.samples);
         for(i64 y = 0; y < camera.image_height; ++y) {
+            cout.write(format("processing row {}\n", y));
             for(i64 x = 0; x < camera.image_width; ++x) {
                 Vec3& pixel = pixels.push_back(Vec3{0.0f});
                 for(i64 sample = 0; sample < samples_root * samples_root; ++sample) {

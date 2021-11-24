@@ -88,7 +88,7 @@ namespace raytracing {
             i64 primitives = 0;
             i32 depth = 0;
             i32 bad_refines = 0;
-            f32 empty_bonus;
+            f32 empty_bonus = 0.0f;
         };
 
         void construct_node(Construct_Parameters const& parameters);

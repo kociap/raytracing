@@ -1,5 +1,6 @@
 .vscode/
 build/
+dump/
 
 build.bat
 buildf.bat
